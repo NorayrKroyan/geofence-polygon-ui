@@ -611,7 +611,22 @@ async function loadGeofences() {
   try {
     const response = await getGeofences(false)
     geofences.value = Array.isArray(response?.data?.data) ? response.data.data : []
-    renderStaticGeofences()
+
+    if (!geofences.value.length) {
+      selectedId.value = null
+      renderStaticGeofences()
+      return
+    }
+
+    const current = selectedId.value
+        ? geofences.value.find((item) => Number(item.id) === Number(selectedId.value))
+        : null
+
+    if (current) {
+      selectGeofence(current)
+    } else {
+      selectGeofence(geofences.value[0])
+    }
   } catch (error) {
     geofences.value = []
     setStatus(error?.response?.data?.message || 'Failed to load geofences.')
