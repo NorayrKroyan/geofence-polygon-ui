@@ -41,6 +41,47 @@ class GeofenceEvaluatorService
         ];
     }
 
+    public function computeBoundingBox(array $paths): array
+    {
+        $polygon = $this->normalizePolygon($paths);
+
+        if (count($polygon) === 0) {
+            return [
+                'north' => null,
+                'south' => null,
+                'east' => null,
+                'west' => null,
+            ];
+        }
+
+        $lats = array_column($polygon, 'lat');
+        $lngs = array_column($polygon, 'lng');
+
+        return [
+            'north' => round(max($lats), 7),
+            'south' => round(min($lats), 7),
+            'east' => round(max($lngs), 7),
+            'west' => round(min($lngs), 7),
+        ];
+    }
+
+    public function computeBoundingBoxCenter(array $boundingBox): array
+    {
+        if (
+            $boundingBox['north'] === null ||
+            $boundingBox['south'] === null ||
+            $boundingBox['east'] === null ||
+            $boundingBox['west'] === null
+        ) {
+            return ['lat' => null, 'lng' => null];
+        }
+
+        return [
+            'lat' => round((((float) $boundingBox['north']) + ((float) $boundingBox['south'])) / 2, 7),
+            'lng' => round((((float) $boundingBox['east']) + ((float) $boundingBox['west'])) / 2, 7),
+        ];
+    }
+
     public function pointOnSegment(array $point, array $a, array $b, float $epsilon = 1.0E-9): bool
     {
         $px = (float) $point['lng'];
@@ -109,9 +150,17 @@ class GeofenceEvaluatorService
     {
         $polygon = $this->normalizePolygon($paths);
         $center = $this->computeCenter($polygon);
+        $boundingBox = $this->computeBoundingBox($polygon);
+        $boundingBoxCenter = $this->computeBoundingBoxCenter($boundingBox);
 
         $geofence->geometry_json = ['paths' => $polygon];
         $geofence->polygon_points = $polygon;
+
+        // Mobile compatibility fields
+        $geofence->trigger_zone = $polygon;
+        $geofence->bounding_box = $boundingBox;
+        $geofence->bounding_box_center = $boundingBoxCenter;
+
         $geofence->center_point_lat = $center['lat'];
         $geofence->center_point_lng = $center['lng'];
 

@@ -7,7 +7,7 @@ use App\Http\Controllers\Api\SettingController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/settings', [SettingController::class, 'index']);
-Route::put('/settings', [SettingController::class, 'upsert']);
+Route::put('/settings', [SettingController::class, 'update']);
 
 Route::get('/geofences', [GeofenceController::class, 'index']);
 Route::post('/geofences', [GeofenceController::class, 'store']);
@@ -18,4 +18,4 @@ Route::get('/gps-points', [GpsPointController::class, 'index']);
 Route::post('/gps-points', [GpsPointController::class, 'store']);
 Route::post('/gps-points/test', [GpsPointController::class, 'storeTest']);
 
-Route::get('/mobile/bootstrap', [MobileBootstrapController::class, 'index']);
+Route::get('/mobile/bootstrap', [MobileBootstrapController::class, 'bootstrap']);

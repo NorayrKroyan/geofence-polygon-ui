@@ -7,7 +7,7 @@ use App\Models\Geofence;
 use App\Services\GeofenceEvaluatorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class GeofenceController extends Controller
 {
@@ -45,7 +45,7 @@ class GeofenceController extends Controller
 
     public function update(Request $request, Geofence $geofence): JsonResponse
     {
-        $validated = $this->validatePayload($request, $geofence);
+        $validated = $this->validatePayload($request);
 
         $this->fillGeofence($geofence, $validated)->save();
 
@@ -65,9 +65,10 @@ class GeofenceController extends Controller
         ]);
     }
 
-    protected function validatePayload(Request $request, ?Geofence $geofence = null): array
+    protected function validatePayload(Request $request): array
     {
-        return $request->validate([
+        $validated = $request->validate([
+            'event_id' => ['nullable', 'integer', 'min:1'],
             'name' => ['required', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:20'],
             'notes' => ['nullable', 'string'],
@@ -76,17 +77,44 @@ class GeofenceController extends Controller
             'entry_action' => ['nullable', 'string', 'max:40'],
             'exit_action' => ['nullable', 'string', 'max:40'],
             'expire_date' => ['nullable', 'date'],
-            'geometry_json' => ['required', 'array'],
-            'geometry_json.paths' => ['required', 'array', 'min:3'],
-            'geometry_json.paths.*.lat' => ['required', 'numeric', 'between:-90,90'],
-            'geometry_json.paths.*.lng' => ['required', 'numeric', 'between:-180,180'],
+
+            'geometry_json' => ['nullable', 'array'],
+            'geometry_json.paths' => ['nullable', 'array'],
+            'geometry_json.paths.*.lat' => ['required_with:geometry_json.paths', 'numeric', 'between:-90,90'],
+            'geometry_json.paths.*.lng' => ['required_with:geometry_json.paths', 'numeric', 'between:-180,180'],
+
+            'trigger_zone' => ['nullable', 'array'],
+            'trigger_zone.*.lat' => ['required_with:trigger_zone', 'numeric', 'between:-90,90'],
+            'trigger_zone.*.lng' => ['required_with:trigger_zone', 'numeric', 'between:-180,180'],
+
+            // accepted if mobile sends them, but backend recomputes them
+            'bounding_box' => ['nullable', 'array'],
+            'bounding_box_center' => ['nullable', 'array'],
         ]);
+
+        $paths = data_get($validated, 'geometry_json.paths');
+        $triggerZone = $validated['trigger_zone'] ?? null;
+
+        $resolvedPaths = is_array($paths) && count($paths) >= 3
+            ? $paths
+            : (is_array($triggerZone) ? $triggerZone : []);
+
+        if (count($resolvedPaths) < 3) {
+            throw ValidationException::withMessages([
+                'geometry_json.paths' => ['A polygon with at least 3 points is required.'],
+            ]);
+        }
+
+        $validated['_resolved_paths'] = $resolvedPaths;
+
+        return $validated;
     }
 
     protected function fillGeofence(Geofence $geofence, array $validated): Geofence
     {
-        $paths = data_get($validated, 'geometry_json.paths', []);
+        $paths = $validated['_resolved_paths'] ?? [];
 
+        $geofence->event_id = $validated['event_id'] ?? null;
         $geofence->name = $validated['name'];
         $geofence->color = $validated['color'] ?? '#2563eb';
         $geofence->notes = $validated['notes'] ?? null;
